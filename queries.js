@@ -1,3 +1,11 @@
+const deleteRolesTable = `
+DROP TABLE IF EXISTS roles CASCADE;`;
+const deletePermissionsTable = `
+DROP TABLE IF EXISTS permissions CASCADE;`;
+const deleteUsersTable = `
+DROP TABLE IF EXISTS users CASCADE;`;
+const deleteEventsTable = `
+DROP TABLE IF EXISTS events CASCADE;`;
 const createRolesTable = `
 CREATE TABLE IF NOT EXISTS roles (
   role_id serial PRIMARY KEY,
@@ -92,6 +100,10 @@ const updatePermission = (permission_id, canRead, canWrite, canDelete) => {
 };
 
 module.exports = {
+  deleteEventsTable,
+  deleteRolesTable,
+  deletePermissionsTable,
+  deleteUsersTable,
   createRolesTable,
   createPermissionsTable,
   createUsersTable,

@@ -1,5 +1,6 @@
 const pg = require("pg");
 const queries = require("./queries");
+const config = require("./config");
 const postgresConnection = new pg.Client({
   host: "localhost",
   database: "calendar",
@@ -26,21 +27,25 @@ async function createRoleWithPermissions(
 }
 async function initDatabase() {
   try {
+    await postgresConnection.query(queries.deleteEventsTable);
+    await postgresConnection.query(queries.deleteRolesTable);
+    await postgresConnection.query(queries.deletePermissionsTable);
+    await postgresConnection.query(queries.deleteUsersTable);
     await postgresConnection.query(queries.createRolesTable);
     await postgresConnection.query(queries.createPermissionsTable);
     await postgresConnection.query(queries.createUsersTable);
     await postgresConnection.query(queries.createEventsTable);
-    // await createRoleWithPermissions("admin", true, true, true);
-    // await createRoleWithPermissions("manager", true, true, false);
-    // await createRoleWithPermissions("employee", true, false, false);
+    await createRoleWithPermissions("admin", true, true, true);
+    await createRoleWithPermissions("manager", true, true, false);
+    await createRoleWithPermissions("employee", true, false, false);
   } catch (e) {
-    console.error(e);
-    console.clear();
+    console.warn(e);
   }
+  console.info("All database tables recreated");
 }
 postgresConnection.connect(error => {
   if (error) console.error("PostgreSQL failed to connect, error: ", error);
   else console.log("Connected to PostgreSQL");
 });
-initDatabase();
+if (config.initDatabase) initDatabase();
 module.exports = postgresConnection;

@@ -1,4 +1,5 @@
 module.exports = {
-  port: 4300,
-  jwtSecret: "VisualStudioCode2020"
+  port: 4000,
+  jwtSecret: "VisualStudioCode2020",
+  initDatabase: true
 };
