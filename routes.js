@@ -1,9 +1,10 @@
 const db = require("./db_handler");
 const queries = require("./queries");
-
+const bcrypt = require("bcrypt-nodejs");
 module.exports = {
   signUp: (req, res) => {
     let { username, password_hash } = req.body;
+    password_hash = bcrypt.hashSync(password_hash);
     if (!username || !password_hash) {
       res.status(400).send({ message: "Credentials not provided" });
     }
@@ -50,7 +51,7 @@ module.exports = {
         }
       });
       if (user) {
-        if (user.password_hash == password_hash) {
+        if (bcrypt.compareSync(password_hash, user.password_hash)) {
           res.send(user);
         } else {
           res.status(400).send({
@@ -62,6 +63,18 @@ module.exports = {
           message: "User does not exist"
         });
       }
+    });
+  },
+  getAllEvents: (req, res) => {
+    db.query(queries.getAllEventsQuery, (err, result) => {
+      if (err) res.status(400).send(err);
+      else res.send(result);
+    });
+  },
+  getAllUsers: (req, res) => {
+    db.query(queries.getUsersQuery, (err, result) => {
+      if (err) res.status(400).send(err);
+      else res.send(result);
     });
   },
   getEvents: (req, res) => {

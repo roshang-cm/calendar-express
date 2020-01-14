@@ -34,6 +34,7 @@ let getEventsForUserQueryBuilder = user_id => {
   return `SELECT * FROM events WHERE user_id = ${user_id};`;
 };
 
+let getAllEventsQuery = `SELECT * FROM events;`;
 let updateEventQueryBuilder = (
   event_id,
   date,
@@ -55,6 +56,7 @@ module.exports = {
   insertEventQueryBuilder,
   insertUserQueryBuilder,
   getUsersQuery,
+  getAllEventsQuery,
   getEventsForUserQueryBuilder,
   updateEventQueryBuilder,
   deleteEventQueryBuilder
