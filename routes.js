@@ -1,128 +1,268 @@
 const db = require("./db_handler");
 const queries = require("./queries");
 const bcrypt = require("bcrypt-nodejs");
-module.exports = {
-  signUp: (req, res) => {
-    let { username, password_hash } = req.body;
-    password_hash = bcrypt.hashSync(password_hash);
-    if (!username || !password_hash) {
-      res.status(400).send({ message: "Credentials not provided" });
+const jwt = require("jsonwebtoken");
+const config = require("./config");
+
+//Helpers
+/**
+ * Returns user object if JWT provided in the request is valid.
+ * @param {req} Request
+ */
+const resolveJwtToUser = req =>
+  new Promise(async (resolve, reject) => {
+    let token = req.headers["x-access-token"] || req.headers["authorization"];
+    if (token && token.startsWith("Bearer ")) {
+      token = token.slice(7, token.length);
     }
-    let isUserPresent = false;
-    db.query(queries.getUsersQuery, (err, result) => {
-      result.forEach(entry => {
-        if (entry.username === username) {
-          isUserPresent = true;
-        }
-      });
-      if (isUserPresent) {
-        res.status(400).send({
-          message: "User already exists"
-        });
-      } else {
-        db.query(
-          queries.insertUserQueryBuilder(username, password_hash),
-          (err, result) => {
-            if (err) res.status(400).send(err);
-            else
-              db.query(queries.getUsersQuery, (err, result) => {
-                let user = null;
-                result.forEach(entry => {
-                  if (entry.username == username) {
-                    user = entry;
-                  }
-                });
-                if (user) {
-                  res.send(user);
-                }
-              });
-          }
-        );
+    if (!token) {
+      reject("JWT Auth not provided");
+    }
+    let user_id;
+    try {
+      user_id = jwt.verify(token, config.jwtSecret).id;
+    } catch (error) {
+      reject("Auth invalid");
+    }
+    let user = await db.query(queries.getUserWhere("id", user_id));
+    user = user.rows[0];
+    resolve(user);
+  });
+
+//Route Handlers
+module.exports = {
+  signUp: async (req, res) => {
+    try {
+      //Getting credentials
+      let { username, password_hash } = req.body;
+      console.log(username, password_hash);
+      if (!username || !password_hash) {
+        res.status(400).send("Proper credentials not provided");
+        return;
       }
-    });
+      password_hash = bcrypt.hashSync(password_hash);
+      //Assigning default role as Employee
+      let roles = (
+        await db.query("SELECT * FROM roles WHERE role_name = 'employee';")
+      ).rows;
+      let role_id = roles[0].role_id;
+      let userInsertResult = await db.query(
+        queries.insertUser(username, password_hash, role_id)
+      );
+      //Once user is inserted, getting the data using the id
+      let userId = userInsertResult.rows[0].id;
+      let userSelectResult = await db.query(queries.getUserWhere("id", userId));
+      let user = userSelectResult.rows[0];
+      delete user.password_hash;
+      jwtString = jwt.sign({ id: user.id }, config.jwtSecret, {
+        expiresIn: "24h"
+      });
+      res.send({ ...user, jwt: jwtString });
+    } catch (e) {
+      res.status(400).send(e);
+    }
   },
-  login: (req, res) => {
-    let { username, password_hash } = req.query;
-    db.query(queries.getUsersQuery, (err, result) => {
-      let user = null;
-      result.forEach(entry => {
-        if (entry.username == username) {
-          user = entry;
-        }
-      });
-      if (user) {
-        if (bcrypt.compareSync(password_hash, user.password_hash)) {
-          res.send(user);
-        } else {
-          res.status(400).send({
-            message: "Invalid Password"
-          });
-        }
-      } else {
-        res.status(404).send({
-          message: "User does not exist"
-        });
+  login: async (req, res) => {
+    try {
+      let { username, password } = req.query;
+      console.log(username, password);
+      if (!username || !password) {
+        res.status(400).send("Credentials missing");
+        return;
       }
-    });
+      let user = await db.query(
+        queries.getUserWhere("username", `'${username}'`)
+      );
+      if (user.rowCount == 0) {
+        res.status(404).send("User does not exist");
+        return;
+      }
+      user = user.rows[0];
+      if (bcrypt.compareSync(password, user.password_hash)) {
+        delete user.password_hash;
+        jwtString = jwt.sign({ id: user.id }, config.jwtSecret, {
+          expiresIn: "24h"
+        });
+        res.send({ ...user, jwt: jwtString });
+      } else {
+        res.status(400).send("Invalid Password");
+      }
+    } catch (error) {
+      res.status(400).send(error);
+    }
   },
   getAllEvents: (req, res) => {
-    db.query(queries.getAllEventsQuery, (err, result) => {
+    db.query(queries.getAllEvents, (err, result) => {
       if (err) res.status(400).send(err);
       else res.send(result);
     });
   },
   getAllUsers: (req, res) => {
-    db.query(queries.getUsersQuery, (err, result) => {
+    db.query(queries.getAllUsers, (err, result) => {
       if (err) res.status(400).send(err);
       else res.send(result);
     });
   },
   getEvents: (req, res) => {
     let { user_id } = req.query;
-    db.query(queries.getEventsForUserQueryBuilder(user_id), (err, result) => {
+    db.query(queries.getEventsForUser(user_id), (err, result) => {
       if (err) res.status(404).send(err);
       else res.send(result);
     });
   },
-  insertEvents: (req, res) => {
-    let { date, title, description, user_id, completed } = req.body;
-    console.log(req.body);
-    db.query(
-      queries.insertEventQueryBuilder(
-        date,
-        description,
-        title,
-        user_id,
-        completed == "false" || !completed ? false : true
-      ),
-      (err, result) => {
-        if (err) console.log(err);
-        else res.send(result);
-      }
-    );
+  insertEvents: async (req, res) => {
+    let { date, title, description, completed } = req.body;
+    if (!(date && title && description)) {
+      res.status(400).json({
+        success: false,
+        message: "Missing event details"
+      });
+      return;
+    }
+    let user = await resolveJwtToUser(req).catch(err => {
+      res.status(400).json({
+        success: false,
+        message: err
+      });
+    });
+    //If user has permission to write
+    if (user.write) {
+      let insertResult = await db
+        .query(queries.insertEvent(date, title, description, completed))
+        .catch(err => {
+          console.error(err);
+          res.status(400).send(err);
+          return;
+        });
+      res.json({
+        success: true,
+        message: "Event added successfully"
+      });
+      return;
+    }
+
+    res.status(440).json({
+      success: false,
+      message: "User does not have permission to add events"
+    });
   },
-  updateEvent: (req, res) => {
-    let { event_id, date, title, description, completed } = req.body;
-    db.query(
-      queries.updateEventQueryBuilder(
-        event_id,
-        date,
-        title,
-        description,
-        completed == "false" || !completed ? false : true
-      ),
-      (err, result) => {
-        console.log(err, result);
-        if (err) res.status(400).send(err);
-        else res.send(result);
+  updateEvent: async (req, res) => {
+    let { date, title, event_id, description, completed } = req.body;
+    if (!(event_id && date && title && description)) {
+      res.status(400).json({
+        success: false,
+        message: "Missing event details"
+      });
+      return;
+    }
+    let user = await resolveJwtToUser(req).catch(err => {
+      res.status(400).json({
+        success: false,
+        message: err
+      });
+    });
+    //If user has permission to write
+    if (user.write) {
+      let updateResult = await db
+        .query(
+          queries.updateEvent(event_id, date, title, description, completed)
+        )
+        .catch(err => {
+          console.log(err);
+          res.status(400).json({
+            success: false,
+            message: err
+          });
+          return;
+        });
+      if (updateResult.rowCount == 0) {
+        res.status(400).json({
+          success: false,
+          message: "No event with id " + event_id
+        });
+        return;
       }
-    );
+      res.json({
+        success: true,
+        message: "Event updated successfully"
+      });
+      return;
+    }
+    res.status(440).json({
+      success: false,
+      message: "User does not have permission to add events"
+    });
   },
-  deleteEvent: (req, res) => {
+  deleteEvent: async (req, res) => {
     let { event_id } = req.body;
-    db.query(queries.deleteEventQueryBuilder(event_id), (err, result) => {
-      if (err) res.status(400).send(err);
-      else res.send(result);
+    if (!event_id) {
+      res.status(400).json({
+        success: false,
+        message: "Event ID not provided"
+      });
+      return;
+    }
+    let user = await resolveJwtToUser(req).catch(err => {
+      res.status(400).json({
+        success: false,
+        message: err
+      });
+    });
+    if (user.delete) {
+      let deleteResult = await db.query(queries.deleteEvent(event_id));
+      if (deleteResult.rowCount == 0) {
+        res.status(400).json({
+          success: false,
+          message: "No event with id " + event_id
+        });
+        return;
+      }
+      res.json({
+        success: true,
+        message: "Event deleted successfully"
+      });
+    } else {
+      res.status(403).json({
+        success: false,
+        message: "User does not have permission to delete events"
+      });
+    }
+  },
+  updateUserRole: async (req, res) => {
+    let { user_id, role_id } = req.body;
+    if (!(user_id && role_id)) {
+      res.status(400).json({
+        success: false,
+        message: "Details not provided."
+      });
+      return;
+    }
+    let user = await resolveJwtToUser(req).catch(err => {
+      res.status(400).json({
+        success: false,
+        message: err
+      });
+      return;
+    });
+
+    if (user.write && user.read && user.delete) {
+      let updateResult = await db
+        .query(queries.updateUserRole(user_id, role_id))
+        .catch(err => {
+          res.status(400).json({
+            success: false,
+            message: err
+          });
+        });
+      res.json({
+        success: true,
+        message: "User role updated successfully"
+      });
+      return;
+    }
+    res.status(403).json({
+      success: false,
+      message: "User does not have permission to update roles"
     });
   }
 };

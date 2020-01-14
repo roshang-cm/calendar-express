@@ -1,63 +1,100 @@
-let createUsersTableQuery =
-  "CREATE TABLE IF NOT EXISTS user ( id INT AUTO_INCREMENT PRIMARY KEY, username TEXT NOT NULL, password_hash TEXT NOT NULL);";
-let createEventsTableQuery =
-  "CREATE TABLE IF NOT EXISTS events ( id INT AUTO_INCREMENT PRIMARY KEY, date DATETIME NOT NULL, title TEXT NOT NULL, description TEXT NOT NULL, user_id int, completed BOOLEAN, FOREIGN KEY (user_id) REFERENCES user(id) ON DELETE CASCADE);";
-let insertUserQueryBuilder = (username, password_hash) => {
-  return `INSERT INTO user(username, password_hash) VALUES ('${username}', '${password_hash}');`;
+const createRolesTable = `
+CREATE TABLE IF NOT EXISTS roles (
+  role_id serial PRIMARY KEY,
+  role_name VARCHAR (50) UNIQUE NOT NULL
+);`;
+const createPermissionsTable = `
+CREATE TABLE IF NOT EXISTS permissions (
+  role_id INTEGER NOT NULL REFERENCES roles, 
+  read BOOLEAN NOT NULL,
+  write BOOLEAN NOT NULL,
+  delete BOOLEAN NOT NULL
+);`;
+const createUsersTable = `CREATE TABLE IF NOT EXISTS users (
+    id serial PRIMARY KEY,
+    username VARCHAR (50) UNIQUE NOT NULL, 
+    password_hash TEXT NOT NULL,
+    role_id INTEGER NOT NULL REFERENCES roles
+  );`;
+const createEventsTable = `CREATE TABLE IF NOT EXISTS events ( 
+  id serial PRIMARY KEY,
+   date TIMESTAMP NOT NULL,
+    title TEXT NOT NULL,
+     description TEXT NOT NULL,
+       completed BOOLEAN);`;
+
+const getAllUsers =
+  "SELECT users.id, users.username, users.role_id, roles.role_name, permissions.read, permissions.write, permissions.delete FROM users, roles, permissions WHERE users.role_id = roles.role_id AND permissions.role_id = roles.role_id;";
+const getAllEvents = `SELECT * FROM events;`;
+const getUserWhere = (key, value) =>
+  `SELECT users.id, users.username, users.password_hash, users.role_id, roles.role_name, permissions.read, permissions.write, permissions.delete FROM users, roles, permissions WHERE users.${key} = ${value} AND users.role_id = roles.role_id AND permissions.role_id = roles.role_id;`;
+
+const deleteEvent = event_id => {
+  return `DELETE FROM events WHERE id = '${event_id}'`;
 };
-let getUsersQuery = "SELECT * FROM user;";
-let insertEventQueryBuilder = (
-  date,
-  title,
-  description,
-  user_id,
-  completed
-) => {
+const insertRole = role_name => {
+  return `INSERT INTO roles (role_name) VALUES ('${role_name}') RETURNING role_id;`;
+};
+const insertPermission = (role_id, canRead, canWrite, canDelete) => {
+  return `
+  INSERT INTO permissions (role_id, read, write, delete) VALUES (${role_id}, ${canRead}, ${canWrite}, ${canDelete});`;
+};
+const insertUser = (username, password_hash, role_id) => {
+  return `INSERT INTO users (username, password_hash, role_id) VALUES ('${username}', '${password_hash}', ${role_id}) RETURNING id;`;
+};
+const insertEvent = (date, title, description, completed) => {
   return `
     INSERT INTO events
     (
         date,
         title,
         description,
-        user_id,
         completed
     ) VALUES (
 '${date}',
 '${title}',
 '${description}',
-${user_id},
-${completed ? 1 : 0}
+${completed ? true : false}
     );
     `;
 };
-let getEventsForUserQueryBuilder = user_id => {
+const getEventsForUser = user_id => {
   return `SELECT * FROM events WHERE user_id = ${user_id};`;
 };
 
-let getAllEventsQuery = `SELECT * FROM events;`;
-let updateEventQueryBuilder = (
-  event_id,
-  date,
-  title,
-  description,
-  completed
-) => {
-  return `UPDATE events SET date = '${date}', title = '${title}', description = '${description}', completed = ${
-    completed ? 1 : 0
-  } WHERE id = ${event_id}`;
+const updateEvent = (event_id, date, title, description, completed) => {
+  return `
+  UPDATE events 
+  SET date = '${date}',
+  title = '${title}',
+  description = '${description}',
+  completed = ${completed ? true : false}
+  WHERE id = ${event_id}
+  `;
 };
 
-let deleteEventQueryBuilder = event_id => {
-  return `DELETE FROM events WHERE id = '${event_id}'`;
+const updateUserRole = (user_id, role_id) => {
+  return `
+  UPDATE users
+  SET role_id = ${role_id}
+  WHERE id = ${user_id}
+  `;
 };
+
 module.exports = {
-  createUsersTableQuery,
-  createEventsTableQuery,
-  insertEventQueryBuilder,
-  insertUserQueryBuilder,
-  getUsersQuery,
-  getAllEventsQuery,
-  getEventsForUserQueryBuilder,
-  updateEventQueryBuilder,
-  deleteEventQueryBuilder
+  createRolesTable,
+  createPermissionsTable,
+  createUsersTable,
+  createEventsTable,
+  insertRole,
+  insertPermission,
+  insertEvent,
+  insertUser,
+  getAllUsers,
+  getUserWhere,
+  getAllEvents,
+  getEventsForUser,
+  updateEvent,
+  deleteEvent,
+  updateUserRole
 };
