@@ -81,6 +81,16 @@ const updateUserRole = (user_id, role_id) => {
   `;
 };
 
+const updatePermission = (permission_id, canRead, canWrite, canDelete) => {
+  return `
+  UPDATE permissions 
+  SET read = ${canRead}, 
+  write = ${canWrite}, 
+  delete = ${canDelete}
+  WHERE role_id = ${permission_id}
+  `;
+};
+
 module.exports = {
   createRolesTable,
   createPermissionsTable,
@@ -96,5 +106,6 @@ module.exports = {
   getEventsForUser,
   updateEvent,
   deleteEvent,
-  updateUserRole
+  updateUserRole,
+  updatePermission
 };
