@@ -24,7 +24,13 @@ const resolveJwtToUser = req =>
     } catch (error) {
       reject("Auth invalid");
     }
-    let user = await db.query(queries.getUserWhere("id", user_id));
+    let user = await db
+      .query(queries.getUserWhere("id", user_id))
+      .catch(err => {
+        console.log("Error inside resolveJwtToUser", err);
+        reject(err);
+      });
+    console.log("Inside resolveJwtToUser", user);
     user = user.rows[0];
     resolve(user);
   });
@@ -34,13 +40,13 @@ module.exports = {
   signUp: async (req, res) => {
     try {
       //Getting credentials
-      let { username, password_hash } = req.body;
-      console.log(username, password_hash);
-      if (!username || !password_hash) {
+      let { username, password } = req.body;
+      console.log(username, password);
+      if (!username || !password) {
         res.status(400).send("Proper credentials not provided");
         return;
       }
-      password_hash = bcrypt.hashSync(password_hash);
+      let password_hash = bcrypt.hashSync(password);
       //Assigning default role as Employee
       let roles = (
         await db.query("SELECT * FROM roles WHERE role_name = 'employee';")
