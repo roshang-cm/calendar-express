@@ -105,6 +105,10 @@ module.exports = {
       else res.send(result.rows);
     });
   },
+  getAllRoles: async (req, res) => {
+    let result = await db.query(queries.getAllRoles);
+    res.send(result.rows);
+  },
   getEvents: (req, res) => {
     let { user_id } = req.query;
     db.query(queries.getEventsForUser(user_id), (err, result) => {

@@ -34,6 +34,7 @@ const createEventsTable = `CREATE TABLE IF NOT EXISTS events (
 const getAllUsers =
   "SELECT users.id, users.username, users.role_id, roles.role_name, permissions.read, permissions.write, permissions.delete FROM users, roles, permissions WHERE users.role_id = roles.role_id AND permissions.role_id = roles.role_id;";
 const getAllEvents = `SELECT * FROM events;`;
+const getAllRoles = `SELECT * FROM roles`;
 const getUserWhere = (key, value) =>
   `SELECT users.id, users.username, users.password_hash, users.role_id, roles.role_name, permissions.read, permissions.write, permissions.delete FROM users, roles, permissions WHERE users.${key} = ${value} AND users.role_id = roles.role_id AND permissions.role_id = roles.role_id;`;
 
@@ -113,6 +114,7 @@ module.exports = {
   insertEvent,
   insertUser,
   getAllUsers,
+  getAllRoles,
   getUserWhere,
   getAllEvents,
   getEventsForUser,

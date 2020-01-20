@@ -18,6 +18,7 @@ app.get("/events", routes.getEvents);
 app.post("/events", routes.insertEvents);
 app.post("/all-events", routes.getAllEvents);
 app.post("/all-users", routes.getAllUsers);
+app.post("/all-roles", routes.getAllRoles);
 app.post("/update-event", routes.updateEvent);
 app.post("/delete-event", routes.deleteEvent);
 app.post("/update-role", routes.updateUserRole);
