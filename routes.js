@@ -21,18 +21,14 @@ const resolveJwtToUser = req =>
     let user_id;
     try {
       user_id = jwt.verify(token, config.jwtSecret).id;
+      console.log("result of jwt", jwt.verify(token, config.jwtSecret));
     } catch (error) {
       reject("Auth invalid");
     }
     let user = await db
       .query(queries.getUserWhere("id", user_id))
-      .catch(err => {
-        console.log("Error inside resolveJwtToUser", err);
-        reject(err);
-      });
-    console.log("Inside resolveJwtToUser", user);
-    user = user.rows[0];
-    resolve(user);
+      .catch(err => reject(err));
+    resolve(user.rows[0]);
   });
 
 //Route Handlers
@@ -100,44 +96,52 @@ module.exports = {
   getAllEvents: (req, res) => {
     db.query(queries.getAllEvents, (err, result) => {
       if (err) res.status(400).send(err);
-      else res.send(result);
+      else res.send(result.rows);
     });
   },
   getAllUsers: (req, res) => {
     db.query(queries.getAllUsers, (err, result) => {
       if (err) res.status(400).send(err);
-      else res.send(result);
+      else res.send(result.rows);
     });
   },
   getEvents: (req, res) => {
     let { user_id } = req.query;
     db.query(queries.getEventsForUser(user_id), (err, result) => {
       if (err) res.status(404).send(err);
-      else res.send(result);
+      else res.send(result.rows);
     });
   },
   insertEvents: async (req, res) => {
     let { date, title, description, completed } = req.body;
-    if (!(date && title && description)) {
+    if (!(date && title)) {
       res.status(400).json({
         success: false,
         message: "Missing event details"
       });
       return;
     }
-    let user = await resolveJwtToUser(req).catch(err => {
+    let user = {};
+    try {
+      user = await resolveJwtToUser(req);
+    } catch (err) {
       res.status(400).json({
         success: false,
         message: err
       });
-    });
+      return;
+    }
+
     //If user has permission to write
     if (user.write) {
       let insertResult = await db
         .query(queries.insertEvent(date, title, description, completed))
         .catch(err => {
           console.error(err);
-          res.status(400).send(err);
+          res.status(400).json({
+            success: false,
+            message: err
+          });
           return;
         });
       res.json({
@@ -154,7 +158,7 @@ module.exports = {
   },
   updateEvent: async (req, res) => {
     let { date, title, event_id, description, completed } = req.body;
-    if (!(event_id && date && title && description)) {
+    if (!(event_id && date && title)) {
       res.status(400).json({
         success: false,
         message: "Missing event details"
@@ -166,6 +170,7 @@ module.exports = {
         success: false,
         message: err
       });
+      return;
     });
     //If user has permission to write
     if (user.write) {
